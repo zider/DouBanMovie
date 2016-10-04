@@ -6,6 +6,8 @@
 '''
 
 import requests
+import json
+
 from bs4 import BeautifulSoup as bs
 from selenium import webdriver
 
@@ -23,20 +25,15 @@ class MovieDB(object):
             self.url = url + '?from=showing'
             self.soup = bs(requests.get(self.url).text)
         
-        self.title = self.soup.title.text.split()[0] + '-' + self.soup.find('span',{'class':'year'}).text[1:-1]
-        self.info = getInfo(self.soup.find('div',{'id':'info'}).text.split())
-        self.rate = self.soup.find('strong',{'class':'ll rating_num'}).text + ' Rating By ' 
-                    + self.soup.find('span',{'property':'v:votes'}).text + ' Peoples.'
-        self.summary = self.soup.find('span',{'property':'v:summary'}).text.replace(' ','').replace('\\u3000','')
-        self.comments = getComment(self.soup.findAll('div',{'class':'comment'}))
-        self.reviews = getReview(self.soup.findAll('div', {'class': 'review'}))
-        
-    @staticmethod
-    def getInfo(info):
+    def getInfo(self):
+        info = self.soup.find('div',{'id':'info'}).text.split()
         info = [i for i in info if i != '/']
         length = len(info)
         i = 0
         result = {}
+        result['title'] = self.soup.title.text.split()[0] + '-' + self.soup.find('span',{'class':'year'}).text[1:-1]
+        result['rate'] = getRate()
+        result['summary'] = self.soup.find('span',{'property':'v:summary'}).text.replace(' ','').replace('\\u3000','')
         key = ''
         while i < length:
             if info[i] in KEY_INFO:
@@ -48,13 +45,17 @@ class MovieDB(object):
             else:
                 result[key].append(info[i])
                 i += 1
-        return result
+        return json.dumps(result)
             
-    @staticmethod
-    def getComment(comments):
-        result = []
-        user, rate, time = '', '', ''
+    def getRate(self):
+        return self.soup.find('strong',{'class':'ll rating_num'}).text + ' Rating By ' + self.soup.find('span',{'property':'v:votes'}).text + ' Peoples.'
+            
+    def getComment(self):
+        comments = self.soup.findAll('div',{'class':'comment'})
+        result = {}
+        user, rate, time, comment = '', '', '', ''
         for i in comments:
+            comment = i.find('p').text
             i = i.find('span', {'class': 'comment-info'})
             user = i.find('a').text
             info = i.findAll('span')
@@ -64,12 +65,12 @@ class MovieDB(object):
             elif len(info) == 2:
                 rate = info[0]['title']
                 time = info[1].text.split()[0]
-            result.append([user, rate, time])
-        return result
+            result[user] = [user, rate, time, comment]
+        return json.dumps(result)
         
-    @staticmethod
-    def getReview(review):
-        result = []
+    def getReview(self, review):
+        review = self.soup.findAll('div', {'class': 'review'})
+        result = {}
         user, userUrl, rate, title, shortReview, time = '', '', '', '', '', ''
         for i in review:
             info = i.find('div', {'class': 'review-hd'}).find('h3').findAll('a')
@@ -79,5 +80,5 @@ class MovieDB(object):
             rate = i.find('div', {'class': 'review-hd-info'}).find('span')['title']
             time = i.find('div', {'class': 'review-hd-info'}).text.split()[1]
             shortReview = i.find('div', {'class': 'review-short'}).find('span').text.replace('\n', '')
-            result.append([user, userUrl, rate, title, shortReview, time])
-        return result
+            result[user] = [user, userUrl, rate, title, shortReview, time]
+        return json.dumps(result)
